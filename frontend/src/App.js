@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Loader, ChevronLeft, ChevronRight, RotateCcw, Plus, Eye, EyeOff, X, Settings, HelpCircle, Star } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader, ChevronLeft, ChevronRight, RotateCcw, Plus, Eye, EyeOff, X, Settings, HelpCircle, Star, Volume2 } from 'lucide-react';
 import axios from 'axios';
 import './App.css';
 
@@ -38,7 +38,7 @@ const CompactIcons = {
 };
 
 // API base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 function App() {
   const [currentWord, setCurrentWord] = useState(null);
@@ -49,9 +49,9 @@ function App() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [bulkData, setBulkData] = useState('');
-  const [termDelimiter, setTermDelimiter] = useState('tab');
+  const [termDelimiter, setTermDelimiter] = useState('custom');
   const [entryDelimiter, setEntryDelimiter] = useState('newline');
-  const [customTermDelimiter, setCustomTermDelimiter] = useState('');
+  const [customTermDelimiter, setCustomTermDelimiter] = useState(':');
   const [customEntryDelimiter, setCustomEntryDelimiter] = useState('');
   const [previewData, setPreviewData] = useState([]);
   const [toast, setToast] = useState(null);
@@ -243,6 +243,13 @@ function App() {
           prev[result === 'correct' ? 'correct' : result === 'nearly-correct' ? 'nearlyCorrect' : 'incorrect'] + 1,
         total: prev.total + 1
       }));
+
+      // Tự động chuyển từ tiếp theo nếu trả lời đúng và bật autoAdvance
+      if (result === 'correct' && autoAdvance) {
+        setTimeout(() => {
+          handleNext();
+        }, 1500); // Chờ 1.5 giây để người dùng thấy kết quả đúng
+      }
     } catch (err) {
       setError('Không thể kiểm tra đáp án. Vui lòng thử lại.');
       console.error('Error checking answer:', err);
@@ -415,7 +422,8 @@ function App() {
     if (e.key === 'Enter' && !loading) {
       if (!isAnswered) {
         handleSubmit();
-      } else if (feedback?.result === 'correct') {
+      } else if (feedback?.result === 'correct' && !autoAdvance) {
+        // Chỉ chuyển từ thủ công nếu không bật autoAdvance
         handleNext();
       }
     }
@@ -425,15 +433,71 @@ function App() {
   const toggleHint = async () => {
     if (!showHint && currentWord) {
       try {
-        const response = await axios.get(`${API_BASE_URL}/hint/${currentWord.id}`);
-        setWordHint(response.data.hint);
+        // Tạo gợi ý dựa trên mức độ khó và chế độ ngôn ngữ
+        const targetWord = languageMode === 'vietnamese' ? currentWord.english : currentWord.vietnamese;
+        const hint = generateHint(targetWord, difficulty);
+        setWordHint(hint);
         setShowHint(true);
       } catch (err) {
-        console.error('Error loading hint:', err);
+        console.error('Error generating hint:', err);
       }
     } else {
       setShowHint(!showHint);
     }
+  };
+
+  const speakWord = (text, lang) => {
+    if (!soundEnabled) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const generateHint = (word, difficulty) => {
+    if (!word) return '';
+    
+    const wordLength = word.length;
+    let hint = '';
+    
+    switch (difficulty) {
+      case 1: // Dễ - hiển thị 1-2 chữ cái đầu và cuối
+        if (wordLength <= 3) {
+          hint = word; // Hiển thị toàn bộ từ nếu quá ngắn
+        } else if (wordLength <= 5) {
+          hint = word.substring(0, 2) + '*'.repeat(wordLength - 2);
+        } else {
+          hint = word.substring(0, 2) + '*'.repeat(wordLength - 4) + word.substring(wordLength - 2);
+        }
+        break;
+        
+      case 2: // Trung bình - hiển thị 1 chữ cái đầu và cuối
+        if (wordLength <= 2) {
+          hint = word; // Hiển thị toàn bộ từ nếu quá ngắn
+        } else {
+          hint = word.substring(0, 1) + '*'.repeat(wordLength - 2) + word.substring(wordLength - 1);
+        }
+        break;
+        
+      case 3: // Khó - chỉ hiển thị 1 chữ cái đầu hoặc cuối
+        if (wordLength <= 1) {
+          hint = word;
+        } else {
+          // Random chọn hiển thị đầu hay cuối
+          const showFirst = Math.random() < 0.5;
+          if (showFirst) {
+            hint = word.substring(0, 1) + '*'.repeat(wordLength - 1);
+          } else {
+            hint = '*'.repeat(wordLength - 1) + word.substring(wordLength - 1);
+          }
+        }
+        break;
+        
+      default:
+        hint = word;
+    }
+    
+    return hint;
   };
 
   if (loading) {
@@ -501,7 +565,7 @@ function App() {
     <div className="app">
       <header className="header">
         <h1>🎓 Học Tiếng Anh Thông Minh</h1>
-        <p>Luyện tập từ vựng với AI thông minh</p>
+        <p>Luyện tập từ vựng với ☁️ nha</p>
       </header>
 
       <div className="vocabulary-card" style={{ position: 'relative' }}>
@@ -515,18 +579,49 @@ function App() {
           borderBottom: '2px solid rgba(102, 126, 234, 0.1)'
         }}>
           <div style={{ flex: 1 }}>
-            <h2 style={{ 
-              margin: 0, 
-              fontSize: isMobile ? '1.6rem' : '2.2rem',
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #2d3748 0%, #4a5568 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              textShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              {languageMode === 'vietnamese' ? currentWord.vietnamese : currentWord.english}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: isMobile ? '1.6rem' : '2.2rem',
+                fontWeight: '700',
+                background: 'linear-gradient(135deg, #2d3748 0%, #4a5568 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer'
+              }}
+              onClick={() => speakWord(languageMode === 'vietnamese' ? currentWord.vietnamese : currentWord.english, languageMode === 'vietnamese' ? 'vi-VN' : 'en-US')}
+              >
+                {languageMode === 'vietnamese' ? currentWord.vietnamese : currentWord.english}
+              </h2>
+              <button
+                onClick={() => speakWord(languageMode === 'vietnamese' ? currentWord.vietnamese : currentWord.english, languageMode === 'vietnamese' ? 'vi-VN' : 'en-US')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s ease',
+                  borderRadius: '50%',
+                  color: '#667eea'
+                }}
+                title="Phát âm"
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'rgba(102, 126, 234, 0.1)';
+                  e.target.style.transform = 'scale(1.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.transform = 'scale(1)';
+                }}
+              >
+                <Volume2 size={20} />
+              </button>
+            </div>
             <div style={{ 
               marginTop: '8px',
               display: 'flex',
@@ -716,7 +811,8 @@ function App() {
             <button 
               className="submit-btn"
               onClick={() => {
-                if (isAnswered && feedback?.result === 'correct') {
+                if (isAnswered && feedback?.result === 'correct' && !autoAdvance) {
+                  // Chỉ chuyển từ thủ công nếu không bật autoAdvance
                   handleNext();
                 } else if (!isAnswered) {
                   handleSubmit();
@@ -759,7 +855,7 @@ function App() {
                 }
               }}
             >
-              {isAnswered && feedback?.result === 'correct' ? 'Tiếp' : 'Kiểm tra'}
+              {isAnswered && feedback?.result === 'correct' && !autoAdvance ? 'Tiếp' : 'Kiểm tra'}
             </button>
           </div>
         </div>
@@ -1226,7 +1322,7 @@ flexible : linh hoạt"
                         onChange={(e) => setTermDelimiter(e.target.value)}
                         style={{ accentColor: '#4299e1' }}
                       />
-                      Tùy chỉnh
+                      Dấu hai chấm (:)
                     </label>
                     {termDelimiter === 'custom' && (
                       <input
@@ -1544,7 +1640,7 @@ flexible : linh hoạt"
                       onChange={(e) => setWordFilter(e.target.value)}
                       style={{ accentColor: '#4299e1' }}
                     />
-                    Hiển thị tất cả từ ({allWords.length} từ)
+                    Tất cả từ
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input
@@ -1555,7 +1651,7 @@ flexible : linh hoạt"
                       onChange={(e) => setWordFilter(e.target.value)}
                       style={{ accentColor: '#4299e1' }}
                     />
-                    Chỉ từ yêu thích ({favorites.length} từ)
+                    Chỉ từ yêu thích
                   </label>
                 </div>
               </div>

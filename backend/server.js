@@ -300,10 +300,15 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📚 API available at http://localhost:${PORT}/api`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📚 API available at http://localhost:${PORT}/api`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
 
 // Reset user stats
 app.delete('/api/stats/:userId', (req, res) => {
