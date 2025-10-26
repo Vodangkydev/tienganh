@@ -3,10 +3,13 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
 // Middleware
 const allowedOrigins = [
@@ -74,16 +77,32 @@ let userProgressData = [];
 // Initialize database
 const initializeDatabase = () => {
   db.serialize(() => {
-    // Create vocabulary table
+    // Create users table
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating users table:', err);
+      } else {
+        console.log('Users table ready');
+      }
+    });
+
+    // Create vocabulary table (now with user_id)
     db.run(`CREATE TABLE IF NOT EXISTS vocabulary (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
       vietnamese TEXT NOT NULL,
       english TEXT NOT NULL,
       type TEXT NOT NULL,
       pronunciation TEXT,
       image_url TEXT,
       difficulty INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id)
     )`, (err) => {
       if (err) {
         console.error('Error creating vocabulary table:', err);
@@ -96,12 +115,13 @@ const initializeDatabase = () => {
     db.run(`CREATE TABLE IF NOT EXISTS user_progress (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       word_id INTEGER,
-      user_id TEXT,
+      user_id INTEGER,
       is_correct BOOLEAN,
       is_nearly_correct BOOLEAN,
       attempt_count INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (word_id) REFERENCES vocabulary (id)
+      FOREIGN KEY (word_id) REFERENCES vocabulary (id),
+      FOREIGN KEY (user_id) REFERENCES users (id)
     )`, (err) => {
       if (err) {
         console.error('Error creating user_progress table:', err);
@@ -110,33 +130,17 @@ const initializeDatabase = () => {
       }
     });
 
-    // Insert sample data
-    const sampleWords = [
-      ['con mèo', 'cat', 'noun', '/kæt/', '', 1],
-      ['quả táo', 'apple', 'noun', '/ˈæpəl/', '', 1],
-      ['màu đỏ', 'red', 'adjective', '/red/', '', 1],
-      ['chạy', 'run', 'verb', '/rʌn/', '', 1],
-      ['ngôi nhà', 'house', 'noun', '/haʊs/', '', 1],
-      ['con chó', 'dog', 'noun', '/dɔːɡ/', '', 1],
-      ['màu xanh', 'blue', 'adjective', '/bluː/', '', 1],
-      ['đi bộ', 'walk', 'verb', '/wɔːk/', '', 1]
-    ];
-
-    const stmt = db.prepare(`INSERT OR IGNORE INTO vocabulary (vietnamese, english, type, pronunciation, image_url, difficulty) VALUES (?, ?, ?, ?, ?, ?)`);
-    sampleWords.forEach(word => {
-      stmt.run(word, (err) => {
+    // Create default admin user
+    const defaultPassword = bcrypt.hashSync('admin123', 10);
+    db.run(`INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)`, 
+      ['admin', defaultPassword], (err) => {
         if (err) {
-          console.error('Error inserting sample word:', err);
+          console.error('Error creating default user:', err);
+        } else {
+          console.log('Default admin user created (username: admin, password: admin123)');
         }
-      });
-    });
-    stmt.finalize((err) => {
-      if (err) {
-        console.error('Error finalizing statement:', err);
-      } else {
-        console.log('Sample data inserted');
       }
-    });
+    );
   });
 };
 
@@ -154,6 +158,24 @@ app.use((req, res, next) => {
     next();
   });
 });
+
+// JWT Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
 
 // Utility function to calculate similarity
 const calculateSimilarity = (str1, str2) => {
@@ -198,56 +220,132 @@ const levenshteinDistance = (str1, str2) => {
 
 // Routes
 
-// Get all vocabulary words
-app.get('/api/vocabulary', (req, res) => {
-  // Try database first, fallback to static data
-  db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='vocabulary'", (err, row) => {
-    if (err || !row) {
-      console.log('Database not available, using static data');
-      // Return static data in consistent order
-      return res.json(vocabularyData);
+// User Registration (username only)
+app.post('/api/register', (req, res) => {
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  if (username.length < 3) {
+    return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+  }
+
+  // Check if username already exists
+  db.get('SELECT * FROM users WHERE username = ?', [username], (err, existingUser) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
     }
     
-    db.all('SELECT * FROM vocabulary ORDER BY id ASC', (err, rows) => {
-      if (err) {
-        console.error('Error fetching vocabulary from database, using static data:', err);
-        return res.json(vocabularyData);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+    
+    // Create user with empty password (not used for authentication)
+    db.run('INSERT INTO users (username, password) VALUES (?, ?)', 
+      [username, ''], 
+      function(err) {
+        if (err) {
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        const token = jwt.sign({ userId: this.lastID, username }, JWT_SECRET, { expiresIn: '30d' });
+        res.json({ 
+          message: 'User registered successfully', 
+          token,
+          user: { id: this.lastID, username }
+        });
       }
-      res.json(rows || []);
+    );
+  });
+});
+
+// User Login (username only)
+app.post('/api/login', (req, res) => {
+  const { username } = req.body;
+  
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ 
+      message: 'Login successful', 
+      token,
+      user: { id: user.id, username: user.username }
     });
   });
 });
 
-// Get random vocabulary word
-app.get('/api/vocabulary/random', (req, res) => {
-  db.get('SELECT * FROM vocabulary ORDER BY RANDOM() LIMIT 1', (err, row) => {
+// Get user profile
+app.get('/api/profile', authenticateToken, (req, res) => {
+  res.json({ 
+    user: { 
+      id: req.user.userId, 
+      username: req.user.username 
+    } 
+  });
+});
+
+// Get all vocabulary words for authenticated user
+app.get('/api/vocabulary', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+  
+  db.all('SELECT * FROM vocabulary WHERE user_id = ? ORDER BY id ASC', [userId], (err, rows) => {
     if (err) {
-      console.error('Error fetching random word from database, using static data:', err);
-      // Fallback to static data
-      const randomWord = vocabularyData[Math.floor(Math.random() * vocabularyData.length)];
-      return res.json(randomWord);
+      console.error('Error fetching vocabulary from database:', err);
+      return res.status(500).json({ error: 'Database error' });
     }
+    res.json(rows || []);
+  });
+});
+
+// Get random vocabulary word for authenticated user
+app.get('/api/vocabulary/random', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+  
+  db.get('SELECT * FROM vocabulary WHERE user_id = ? ORDER BY RANDOM() LIMIT 1', [userId], (err, row) => {
+    if (err) {
+      console.error('Error fetching random word from database:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!row) {
+      return res.status(404).json({ error: 'No vocabulary words found for this user' });
+    }
+    
     res.json(row);
   });
 });
 
-// Check answer
-app.post('/api/check-answer', (req, res) => {
-  const { wordId, userAnswer, userId = 'anonymous', languageMode = 'vietnamese' } = req.body;
+// Check answer for authenticated user
+app.post('/api/check-answer', authenticateToken, (req, res) => {
+  const { wordId, userAnswer, languageMode = 'vietnamese' } = req.body;
+  const userId = req.user.userId;
   
   if (!wordId || !userAnswer) {
     return res.status(400).json({ error: 'Missing wordId or userAnswer' });
   }
 
-  // Try database first, fallback to static data
-  db.get('SELECT * FROM vocabulary WHERE id = ?', [wordId], (err, word) => {
-    if (err || !word) {
-      console.error('Error fetching word from database, using static data:', err);
-      // Fallback to static data
-      word = vocabularyData.find(w => w.id == wordId);
-      if (!word) {
-        return res.status(404).json({ error: 'Word not found' });
-      }
+  // Check if the word belongs to the authenticated user
+  db.get('SELECT * FROM vocabulary WHERE id = ? AND user_id = ?', [wordId, userId], (err, word) => {
+    if (err) {
+      console.error('Error fetching word from database:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!word) {
+      return res.status(404).json({ error: 'Word not found or does not belong to user' });
     }
 
     const userAnswerLower = userAnswer.toLowerCase().trim();
@@ -286,15 +384,8 @@ app.post('/api/check-answer', (req, res) => {
       [wordId, userId, isCorrect, isNearlyCorrect, 1],
       function(err) {
         if (err) {
-          console.error('Error saving progress to database, saving to memory:', err);
-          // Fallback: save to memory
-          userProgressData.push({
-            word_id: wordId,
-            user_id: userId,
-            is_correct: isCorrect,
-            is_nearly_correct: isNearlyCorrect,
-            attempt_count: 1
-          });
+          console.error('Error saving progress to database:', err);
+          return res.status(500).json({ error: 'Database error' });
         }
       }
     );
@@ -310,9 +401,9 @@ app.post('/api/check-answer', (req, res) => {
   });
 });
 
-// Get user statistics
-app.get('/api/stats/:userId', (req, res) => {
-  const userId = req.params.userId;
+// Get user statistics for authenticated user
+app.get('/api/stats', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
   
   db.all(
     'SELECT is_correct, is_nearly_correct FROM user_progress WHERE user_id = ?',
@@ -335,43 +426,32 @@ app.get('/api/stats/:userId', (req, res) => {
   );
 });
 
-// Add new vocabulary word
-app.post('/api/vocabulary', (req, res) => {
+// Add new vocabulary word for authenticated user
+app.post('/api/vocabulary', authenticateToken, (req, res) => {
   const { vietnamese, english, type, pronunciation, image_url, difficulty } = req.body;
+  const userId = req.user.userId;
   
   if (!vietnamese || !english || !type) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Try database first, fallback to static data
   db.run(
-    'INSERT INTO vocabulary (vietnamese, english, type, pronunciation, image_url, difficulty) VALUES (?, ?, ?, ?, ?, ?)',
-    [vietnamese, english, type, pronunciation || '', image_url || '', difficulty || 1],
+    'INSERT INTO vocabulary (user_id, vietnamese, english, type, pronunciation, image_url, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [userId, vietnamese, english, type, pronunciation || '', image_url || '', difficulty || 1],
     function(err) {
       if (err) {
-        console.error('Error adding word to database, adding to static data:', err);
-        // Fallback: add to static data
-        const newId = Math.max(...vocabularyData.map(w => w.id), 0) + 1;
-        const newWord = {
-          id: newId,
-          vietnamese,
-          english,
-          type,
-          pronunciation: pronunciation || '',
-          image_url: image_url || '',
-          difficulty: difficulty || 1
-        };
-        vocabularyData.push(newWord);
-        return res.json({ id: newId, message: 'Word added successfully (static data)' });
+        console.error('Error adding word to database:', err);
+        return res.status(500).json({ error: 'Database error' });
       }
       res.json({ id: this.lastID, message: 'Word added successfully' });
     }
   );
 });
 
-// Delete vocabulary word by ID
-app.delete('/api/vocabulary/:id', (req, res) => {
+// Delete vocabulary word by ID for authenticated user
+app.delete('/api/vocabulary/:id', authenticateToken, (req, res) => {
   const wordId = req.params.id;
+  const userId = req.user.userId;
   
   if (!wordId) {
     return res.status(400).json({ error: 'Missing word ID' });
@@ -379,18 +459,18 @@ app.delete('/api/vocabulary/:id', (req, res) => {
 
   // First delete related user progress records
   db.run(
-    'DELETE FROM user_progress WHERE word_id = ?',
-    [wordId],
+    'DELETE FROM user_progress WHERE word_id = ? AND user_id = ?',
+    [wordId, userId],
     function(err) {
       if (err) {
         console.error('Error deleting user progress:', err);
-        // Continue with vocabulary deletion even if progress deletion fails
+        return res.status(500).json({ error: 'Database error' });
       }
       
       // Then delete the vocabulary word
       db.run(
-        'DELETE FROM vocabulary WHERE id = ?',
-        [wordId],
+        'DELETE FROM vocabulary WHERE id = ? AND user_id = ?',
+        [wordId, userId],
         function(err) {
           if (err) {
             res.status(500).json({ error: err.message });
@@ -398,7 +478,7 @@ app.delete('/api/vocabulary/:id', (req, res) => {
           }
           
           if (this.changes === 0) {
-            return res.status(404).json({ error: 'Word not found' });
+            return res.status(404).json({ error: 'Word not found or does not belong to user' });
           }
           
           res.json({ message: 'Word deleted successfully', deletedRows: this.changes });
@@ -408,73 +488,63 @@ app.delete('/api/vocabulary/:id', (req, res) => {
   );
 });
 
-// Delete all vocabulary words (bulk delete)
-app.delete('/api/vocabulary', (req, res) => {
-  console.log('Bulk delete request received');
+// Delete all vocabulary words for authenticated user (bulk delete)
+app.delete('/api/vocabulary', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+  console.log('Bulk delete request received for user:', userId);
   
   try {
-    // Try database first
-    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='vocabulary'", (err, row) => {
-      if (err || !row) {
-        console.log('Database not available, clearing static data');
-        // Fallback: clear static data
-        vocabularyData = [];
-        userProgressData = [];
-        return res.json({ 
-          message: 'All vocabulary words deleted successfully (static data)', 
-          deletedRows: staticVocabulary.length 
-        });
-      }
-      
-      // First delete all user progress records
-      db.run(
-        'DELETE FROM user_progress',
-        function(err) {
-          if (err) {
-            console.error('Error deleting user progress:', err);
-            // Continue with vocabulary deletion even if progress deletion fails
-          } else {
-            console.log(`Deleted ${this.changes} user progress records`);
-          }
-          
-          // Then delete all vocabulary words
-          db.run(
-            'DELETE FROM vocabulary',
-            function(err) {
-              if (err) {
-                console.error('Error deleting vocabulary:', err);
-                res.status(500).json({ error: 'Failed to delete vocabulary: ' + err.message });
-                return;
-              }
-              
-              console.log(`Deleted ${this.changes} vocabulary words`);
-              res.json({ 
-                message: 'All vocabulary words deleted successfully', 
-                deletedRows: this.changes 
-              });
-            }
-          );
+    // First delete all user progress records for this user
+    db.run(
+      'DELETE FROM user_progress WHERE user_id = ?',
+      [userId],
+      function(err) {
+        if (err) {
+          console.error('Error deleting user progress:', err);
+          return res.status(500).json({ error: 'Database error' });
+        } else {
+          console.log(`Deleted ${this.changes} user progress records`);
         }
-      );
-    });
+        
+        // Then delete all vocabulary words for this user
+        db.run(
+          'DELETE FROM vocabulary WHERE user_id = ?',
+          [userId],
+          function(err) {
+            if (err) {
+              console.error('Error deleting vocabulary:', err);
+              res.status(500).json({ error: 'Failed to delete vocabulary: ' + err.message });
+              return;
+            }
+            
+            console.log(`Deleted ${this.changes} vocabulary words`);
+            res.json({ 
+              message: 'All vocabulary words deleted successfully', 
+              deletedRows: this.changes 
+            });
+          }
+        );
+      }
+    );
   } catch (error) {
     console.error('Error in bulk delete:', error);
     res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 });
 
-// Get hint for word (partial reveal)
-app.get('/api/hint/:wordId', (req, res) => {
+// Get hint for word for authenticated user
+app.get('/api/hint/:wordId', authenticateToken, (req, res) => {
   const wordId = req.params.wordId;
+  const userId = req.user.userId;
   
-  db.get('SELECT * FROM vocabulary WHERE id = ?', [wordId], (err, word) => {
+  db.get('SELECT * FROM vocabulary WHERE id = ? AND user_id = ?', [wordId, userId], (err, word) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
     }
 
     if (!word) {
-      return res.status(404).json({ error: 'Word not found' });
+      return res.status(404).json({ error: 'Word not found or does not belong to user' });
     }
 
     // Generate smart hint based on word length
@@ -541,9 +611,9 @@ app.listen(PORT, () => {
   console.log(`📚 API available at http://localhost:${PORT}/api`);
 });
 
-// Reset user stats
-app.delete('/api/stats/:userId', (req, res) => {
-  const userId = req.params.userId;
+// Reset user stats for authenticated user
+app.delete('/api/stats', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
   
   db.run(
     'DELETE FROM user_progress WHERE user_id = ?',
@@ -558,43 +628,61 @@ app.delete('/api/stats/:userId', (req, res) => {
   );
 });
 
-// Reset database (for development/testing)
-app.post('/api/reset-database', (req, res) => {
-  console.log('Database reset request received');
+// Reset user data (for development/testing)
+app.post('/api/reset-user-data', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+  console.log('User data reset request received for user:', userId);
   
   try {
-    // Try database first
-    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='vocabulary'", (err, row) => {
-      if (err || !row) {
-        console.log('Database not available, resetting static data');
-        // Fallback: reset static data
-        vocabularyData = [...staticVocabulary];
-        userProgressData = [];
-        return res.json({ message: 'Database reset successfully (static data)' });
-      }
+    db.serialize(() => {
+      // Delete all user progress records
+      db.run('DELETE FROM user_progress WHERE user_id = ?', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting user progress:', err);
+        }
+      });
       
-      db.serialize(() => {
-        // Delete all data
-        db.run('DELETE FROM user_progress', (err) => {
+      // Delete all vocabulary words for this user
+      db.run('DELETE FROM vocabulary WHERE user_id = ?', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting vocabulary:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        
+        // Add some sample words for this user
+        const sampleWords = [
+          [userId, 'con mèo', 'cat', 'noun', '/kæt/', '', 1],
+          [userId, 'quả táo', 'apple', 'noun', '/ˈæpəl/', '', 1],
+          [userId, 'màu đỏ', 'red', 'adjective', '/red/', '', 1],
+          [userId, 'chạy', 'run', 'verb', '/rʌn/', '', 1],
+          [userId, 'ngôi nhà', 'house', 'noun', '/haʊs/', '', 1],
+          [userId, 'con chó', 'dog', 'noun', '/dɔːɡ/', '', 1],
+          [userId, 'màu xanh', 'blue', 'adjective', '/bluː/', '', 1],
+          [userId, 'đi bộ', 'walk', 'verb', '/wɔːk/', '', 1],
+          [userId, 'xin chào', 'hello', 'greeting', '/həˈloʊ/', '', 1]
+        ];
+
+        const stmt = db.prepare(`INSERT INTO vocabulary (user_id, vietnamese, english, type, pronunciation, image_url, difficulty) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        sampleWords.forEach(word => {
+          stmt.run(word, (err) => {
+            if (err) {
+              console.error('Error inserting sample word:', err);
+            }
+          });
+        });
+        stmt.finalize((err) => {
           if (err) {
-            console.error('Error deleting user progress:', err);
+            console.error('Error finalizing statement:', err);
+          } else {
+            console.log('Sample data inserted for user');
           }
         });
         
-        db.run('DELETE FROM vocabulary', (err) => {
-          if (err) {
-            console.error('Error deleting vocabulary:', err);
-            return res.status(500).json({ error: err.message });
-          }
-          
-          // Reinitialize with sample data
-          initializeDatabase();
-          res.json({ message: 'Database reset successfully' });
-        });
+        res.json({ message: 'User data reset successfully' });
       });
     });
   } catch (error) {
-    console.error('Error in reset database:', error);
+    console.error('Error in reset user data:', error);
     res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 });
