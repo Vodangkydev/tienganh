@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Loader, ChevronLeft, ChevronRight, RotateCcw, Plus, Eye, EyeOff, X, Settings, HelpCircle, Star, Volume2, User, LogOut, LogIn, FileText, BookOpen } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader, ChevronLeft, ChevronRight, RotateCcw, Plus, Eye, EyeOff, X, Settings, HelpCircle, Star, Volume2, User, LogOut, LogIn, FileText, BookOpen, Cloud } from 'lucide-react';
 import axios from 'axios';
 import './App.css';
 
@@ -924,11 +924,11 @@ function App() {
         <div className="vocabulary-card" style={{ 
           position: 'relative',
           padding: isMobile ? '16px 12px' : '30px',
-          marginBottom: isMobile ? '10px' : '20px',
+          marginBottom: isMobile ? '0px' : '20px',
           textAlign: 'center'
         }}>
           <div style={{ marginBottom: '30px' }}>
-            <User size={64} style={{ color: '#667eea', marginBottom: '20px' }} />
+            <img src="/cloud-icon.png" alt="Cloud Logo" style={{ width: '64px', height: '64px', marginBottom: '20px' }} />
             <h2 style={{ marginBottom: '15px', color: '#2d3748' }}>
               Chào mừng đến với ứng dụng học tiếng Anh!
             </h2>
@@ -973,7 +973,7 @@ function App() {
           <div style={{ marginTop: '30px', padding: '20px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px' }}>
             <h3 style={{ marginBottom: '10px', color: '#667eea' }}>Hướng dẫn sử dụng:</h3>
             <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#6c757d' }}>
-              • Nhập tên người dùng để đăng nhập (ví dụ: kemchite)
+              • Nhập tên người dùng để đăng nhập (ví dụ: vodangky312)
             </p>
             <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#6c757d' }}>
               • Nếu chưa có tài khoản, hệ thống sẽ tự động tạo mới
@@ -1048,7 +1048,7 @@ function App() {
                     type="text"
                     value={loginForm.username}
                     onChange={(e) => setLoginForm({ username: e.target.value })}
-                    placeholder="Nhập tên người dùng (ví dụ: kemchite)"
+                    placeholder="Nhập tên người dùng (ví dụ: vodangky312)"
                     required
                     style={{
                       width: '100%',
@@ -1187,7 +1187,7 @@ function App() {
       <div className="vocabulary-card" style={{ 
         position: 'relative',
         padding: isMobile ? '16px 12px' : '30px',
-        marginBottom: isMobile ? '10px' : '20px'
+        marginBottom: isMobile ? '0px' : '20px'
       }}>
         {/* Mode Toggle */}
         <div style={{
@@ -1246,7 +1246,7 @@ function App() {
 
         {/* Flashcard Mode UI */}
         {flashcardMode ? (
-          <div>
+          <div style={{ paddingBottom: isMobile ? '120px' : '40px' }}>
             <div 
               className="flashcard"
               onClick={() => {
@@ -1258,9 +1258,9 @@ function App() {
               style={{
                 cursor: 'pointer',
                 width: '100%',
-                minHeight: isMobile ? '250px' : '300px',
+                minHeight: isMobile ? '400px' : '300px',
                 position: 'relative',
-                marginBottom: '25px',
+                marginBottom: isMobile ? '20px' : '30px',
                 transition: 'transform 0.6s',
                 transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
                 transformStyle: 'preserve-3d',
@@ -1486,7 +1486,7 @@ function App() {
             <div style={{ 
               display: 'flex', 
               justifyContent: 'center',
-              marginBottom: '20px'
+              marginBottom: isMobile ? '10px' : '20px'
             }}>
               <button 
                 onClick={shuffleWords}
@@ -1524,7 +1524,7 @@ function App() {
               display: 'flex', 
               gap: '20px', 
               justifyContent: 'center',
-              marginTop: '20px'
+              marginTop: isMobile ? '10px' : '20px'
             }}>
               <button 
                 onClick={handlePrevious}
@@ -2709,7 +2709,7 @@ flexible : linh hoạt"
                       justifyContent: 'center',
                       boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
                     }}>
-                      <User size={isMobile ? 22 : 26} style={{ color: 'white' }} />
+                      <img src="/cloud-icon.png" alt="Cloud" style={{ width: isMobile ? '32px' : '38px', height: isMobile ? '32px' : '38px' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: isMobile ? '0.85rem' : '0.9rem', color: '#a0aec0', marginBottom: '4px' }}>
