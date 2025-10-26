@@ -973,7 +973,7 @@ function App() {
           <div style={{ marginTop: '30px', padding: '20px', background: 'rgba(102, 126, 234, 0.1)', borderRadius: '12px' }}>
             <h3 style={{ marginBottom: '10px', color: '#667eea' }}>Hướng dẫn sử dụng:</h3>
             <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#6c757d' }}>
-              • Nhập tên người dùng để đăng nhập (ví dụ: suricute)
+              • Nhập tên người dùng để đăng nhập (ví dụ: kemchite)
             </p>
             <p style={{ margin: '5px 0', fontSize: '0.9rem', color: '#6c757d' }}>
               • Nếu chưa có tài khoản, hệ thống sẽ tự động tạo mới
@@ -1048,7 +1048,7 @@ function App() {
                     type="text"
                     value={loginForm.username}
                     onChange={(e) => setLoginForm({ username: e.target.value })}
-                    placeholder="Nhập tên người dùng (ví dụ: vodangky312)"
+                    placeholder="Nhập tên người dùng (ví dụ: kemchite)"
                     required
                     style={{
                       width: '100%',
