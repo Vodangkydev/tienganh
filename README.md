@@ -1,9 +1,10 @@
 # 🎓 Hệ Thống Học Tiếng Anh Thông Minh
-<img width="1899" height="856" alt="image" src="https://github.com/user-attachments/assets/b1e25bce-3c3e-4d28-b328-3e7e27beba5d" />
-<img width="764" height="846" alt="image" src="https://github.com/user-attachments/assets/7b5d3595-afa4-4834-94a9-9bbb613eab25" />
-<img width="505" height="661" alt="image" src="https://github.com/user-attachments/assets/91713ba1-e1c5-489d-a743-4d23468a18b5" />
-<img width="725" height="864" alt="image" src="https://github.com/user-attachments/assets/c0b367f3-9837-484d-b019-00ad84564c57" />
-
+<img width="991" height="865" alt="image" src="https://github.com/user-attachments/assets/298d21c5-dac2-4359-88b2-a41ba1b12acf" />
+<img width="975" height="875" alt="image" src="https://github.com/user-attachments/assets/ab5f0ebc-1742-440b-889d-d38771abf57c" />
+<img width="967" height="883" alt="image" src="https://github.com/user-attachments/assets/daa144be-6e52-4106-8b43-9a981a2dd669" />
+<img width="976" height="866" alt="image" src="https://github.com/user-attachments/assets/3faa16c1-a88f-4e79-bb61-b30704120117" />
+<img width="976" height="880" alt="image" src="https://github.com/user-attachments/assets/945dfc32-5ab6-4ed2-bd2f-351ba1bfe590" />
+<img width="989" height="886" alt="image" src="https://github.com/user-attachments/assets/956d9f3f-992c-4047-b6d8-45455727131c" />
 
 Ứng dụng học tiếng Anh với tính năng quản lý từ vựng cá nhân theo người dùng.
 
