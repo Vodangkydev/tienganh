@@ -5,12 +5,6 @@
 <img width="725" height="864" alt="image" src="https://github.com/user-attachments/assets/c0b367f3-9837-484d-b019-00ad84564c57" />
 
 
-
-
-
-
-<img width="875" height="857" alt="image" src="https://github.com/user-attachments/assets/305858d2-3e61-4e1c-922f-daec986ef4e4" />
-
 Ứng dụng học tiếng Anh với tính năng quản lý từ vựng cá nhân theo người dùng.
 
 ## ✨ Tính năng chính
