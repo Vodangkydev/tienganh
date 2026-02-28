@@ -1,4 +1,15 @@
 # 🎓 Hệ Thống Học Tiếng Anh Thông Minh
+<img width="1899" height="856" alt="image" src="https://github.com/user-attachments/assets/b1e25bce-3c3e-4d28-b328-3e7e27beba5d" />
+<img width="764" height="846" alt="image" src="https://github.com/user-attachments/assets/7b5d3595-afa4-4834-94a9-9bbb613eab25" />
+<img width="505" height="661" alt="image" src="https://github.com/user-attachments/assets/91713ba1-e1c5-489d-a743-4d23468a18b5" />
+<img width="725" height="864" alt="image" src="https://github.com/user-attachments/assets/c0b367f3-9837-484d-b019-00ad84564c57" />
+<img width="690" height="709" alt="image" src="https://github.com/user-attachments/assets/f74df685-8a03-4aa5-84f2-48c6e1706f44" />
+<img width="823" height="646" alt="image" src="https://github.com/user-attachments/assets/1ee0cb08-3ae2-4c26-b177-018e3b187c9c" />
+
+
+
+
+<img width="875" height="857" alt="image" src="https://github.com/user-attachments/assets/305858d2-3e61-4e1c-922f-daec986ef4e4" />
 
 Ứng dụng học tiếng Anh với tính năng quản lý từ vựng cá nhân theo người dùng.
 
